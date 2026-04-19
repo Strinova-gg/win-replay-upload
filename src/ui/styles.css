@@ -40,6 +40,15 @@ body {
   padding: 16px;
 }
 
+.app-auth-screen {
+  max-width: none;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -57,6 +66,7 @@ body {
   margin-bottom: 12px;
 }
 .notice.warn { border-color: var(--warn); }
+.notice.err { border-color: var(--err); }
 
 .panel {
   background: var(--panel);
@@ -97,6 +107,26 @@ button {
 }
 button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.button-primary {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+
+.button-primary:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+}
+
+.button-danger {
+  border-color: color-mix(in srgb, var(--err) 40%, var(--border));
+  background: color-mix(in srgb, var(--err) 10%, var(--panel));
+}
+
+.button-danger:hover:not(:disabled) {
+  border-color: var(--err);
+  background: color-mix(in srgb, var(--err) 16%, var(--panel));
+}
 
 .status { font-size: 0.85rem; color: var(--muted); }
 
@@ -150,3 +180,125 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .logtable tr.status-failed td:nth-child(2) { color: var(--err); }
 
 .auth { display: flex; align-items: center; gap: 8px; }
+
+.auth-panel {
+  max-width: 560px;
+}
+
+.auth-landing {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-copy {
+  margin: 0 0 12px;
+}
+
+.auth-error {
+  margin-top: 16px;
+  width: 100%;
+}
+
+.auth-provider-list {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.auth-provider-pill {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 0.85rem;
+}
+
+.auth-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.auth-primary-button {
+  min-width: 320px;
+  min-height: 72px;
+  padding: 18px 28px;
+  border-radius: 16px;
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.auth-primary-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--fg) 28%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.modal-card {
+  width: min(100%, 440px);
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.18);
+}
+
+.modal-card h2 {
+  margin: 0 0 10px;
+  font-size: 1.1rem;
+}
+
+.modal-copy {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .app-auth-screen {
+    padding: 20px;
+  }
+
+  .auth-primary-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .modal-card {
+    padding: 18px;
+  }
+
+  .modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .modal-actions button {
+    width: 100%;
+  }
+}

@@ -1,18 +1,19 @@
 {
   "name": "win-replay-upload",
   "version": "0.1.0",
-  "description": "Strinova replay uploader (Electrobun + React + Clerk)",
+  "description": "Stringify Desktop (Electrobun + React + Clerk OAuth)",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "electrobun dev",
-    "dev:watch": "electrobun dev --watch",
-    "build": "electrobun build",
-    "package": "electrobun build --env=stable",
+    "postinstall": "bun run scripts/patch-electrobun-rcedit.ts",
+    "dev": "bun run scripts/patch-electrobun-rcedit.ts && electrobun dev",
+    "dev:watch": "bun run scripts/patch-electrobun-rcedit.ts && electrobun dev --watch",
+    "build": "bun run scripts/patch-electrobun-rcedit.ts && electrobun build && bun run scripts/stamp-win-icon.ts",
+    "package": "bun run scripts/patch-electrobun-rcedit.ts && electrobun build --env=stable && bun run scripts/stamp-win-icon.ts",
+    "patch:electrobun": "bun run scripts/patch-electrobun-rcedit.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@clerk/clerk-react": "^5.61.3",
     "chokidar": "^4.0.3",
     "electrobun": "^1.16.0",
     "react": "^19.2.0",
@@ -23,8 +24,5 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "typescript": "^5.9.3"
-  },
-  "trustedDependencies": [
-    "@clerk/shared"
-  ]
+  }
 }

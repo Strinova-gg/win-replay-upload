@@ -1,7 +1,24 @@
-import type { LogEntry, PlatformInfo } from "../shared/types";
+import type { AppSettings, AuthState, LogEntry, PlatformInfo } from "../shared/types";
 
 export interface ReplayBridge {
   platform: () => Promise<PlatformInfo>;
+  settings: {
+    get: () => Promise<AppSettings>;
+    update: (patch: Partial<AppSettings>) => Promise<AppSettings>;
+  };
+  app: {
+    getClosePromptState: () => Promise<{ pending: boolean }>;
+    quit: () => Promise<{ quitting: boolean }>;
+    closeToTray: () => Promise<{ continuing: boolean }>;
+    onShowClosePrompt: (cb: () => void) => () => void;
+  };
+  shell: {
+    openExternal: (url: string) => Promise<{ opened: boolean }>;
+  };
+  auth: {
+    onCallback: (cb: (payload: { search: string; rawUrl: string }) => void) => () => void;
+    setSignedIn: (signedIn: boolean) => Promise<AuthState>;
+  };
   watcher: {
     start: (dir?: string) => Promise<{ watching: boolean; dir: string }>;
     stop: () => Promise<{ watching: boolean }>;

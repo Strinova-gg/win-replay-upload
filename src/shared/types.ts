@@ -18,10 +18,32 @@ export interface PlatformInfo {
   defaultWatchDir: string;
 }
 
+export interface AppSettings {
+  autoSyncEnabled: boolean;
+  watchDir: string | null;
+}
+
+export interface AuthState {
+  signedIn: boolean;
+}
+
 export type ReplayRPC = {
   bun: RPCSchema<{
     requests: {
       "platform:info": { params: void; response: PlatformInfo };
+      "settings:get": { params: void; response: AppSettings };
+      "settings:update": {
+        params: Partial<AppSettings>;
+        response: AppSettings;
+      };
+      "app:getClosePromptState": { params: void; response: { pending: boolean } };
+      "app:quit": { params: void; response: { quitting: boolean } };
+      "app:closeToTray": { params: void; response: { continuing: boolean } };
+      "shell:openExternal": {
+        params: { url: string };
+        response: { opened: boolean };
+      };
+      "auth:setState": { params: AuthState; response: AuthState };
       "watcher:start": {
         params: { dir?: string };
         response: { watching: boolean; dir: string };
@@ -49,6 +71,9 @@ export type ReplayRPC = {
   webview: RPCSchema<{
     requests: Record<string, never>;
     messages: {
+      "app:showClosePrompt": {};
+      /** Emitted by the bun process when the OAuth loopback callback is received. */
+      "auth:callback": { search: string; rawUrl: string };
       /** Emitted by the bun process when chokidar sees a new replay file. */
       "watcher:file": { path: string };
     };

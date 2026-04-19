@@ -20,8 +20,8 @@ export class ReplayWatcher {
       ignoreInitial: true,
       persistent: true,
       awaitWriteFinish: {
-        stabilityThreshold: 1500,
-        pollInterval: 500,
+        stabilityThreshold: 5_000,
+        pollInterval: 1_000,
       },
     });
 
