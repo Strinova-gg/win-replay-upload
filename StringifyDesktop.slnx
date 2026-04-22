@@ -1,4 +1,14 @@
 <Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="ARM" />
+    <Platform Name="ARM64" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="StringifyDesktop.Installer/StringifyDesktop.Installer.wapproj" Type="c7167f0d-bc9f-4e6e-afe1-012c56b48db5" Id="e801f868-b235-4b92-9138-2412317fc544">
+    <Deploy />
+  </Project>
   <Project Path="StringifyDesktop.Tests/StringifyDesktop.Tests.csproj" />
   <Project Path="StringifyDesktop/StringifyDesktop.csproj" />
 </Solution>

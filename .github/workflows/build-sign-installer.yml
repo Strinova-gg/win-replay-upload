@@ -1,0 +1,217 @@
+name: Build And Sign Desktop Installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  CONFIGURATION: Release
+  PLATFORM: x64
+  RUNTIME_IDENTIFIER: win-x64
+  BUILD_NUMBER: ${{ github.run_number }}
+  RELEASE_VERSION: 0.1.0.${{ github.run_number }}
+  PACKAGE_VERSION: 1.0.0.${{ github.run_number }}
+  APP_PROJECT: StringifyDesktop/StringifyDesktop.csproj
+  PACKAGE_PROJECT: StringifyDesktop.Installer/StringifyDesktop.Installer.wapproj
+  PACKAGE_MANIFEST: StringifyDesktop.Installer/Package.appxmanifest
+  APP_PUBLISH_DIR: StringifyDesktop/bin/x64/Release/net10.0-windows/win-x64/msixpublish
+  DESKTOP_STAGING_DIR: artifacts/desktop
+  INSTALLER_APP_PACKAGES_DIR: StringifyDesktop.Installer/AppPackages
+  PACKAGE_STAGING_DIR: artifacts/installer
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  build-sign-package:
+    name: Build, Sign, And Package
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Azure login for Artifact Signing
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Restore desktop app
+        shell: pwsh
+        run: |
+          dotnet restore $env:APP_PROJECT `
+            -p:Platform=$env:PLATFORM `
+            -p:RuntimeIdentifier=$env:RUNTIME_IDENTIFIER `
+            -p:SelfContained=true
+
+      - name: Publish desktop app for MSIX packaging
+        shell: pwsh
+        run: |
+          $publishDir = Join-Path $env:GITHUB_WORKSPACE $env:APP_PUBLISH_DIR
+
+          if (Test-Path $publishDir) {
+            Remove-Item -LiteralPath $publishDir -Recurse -Force
+          }
+
+          dotnet publish $env:APP_PROJECT `
+            --configuration $env:CONFIGURATION `
+            --runtime $env:RUNTIME_IDENTIFIER `
+            --no-restore `
+            -p:Platform=$env:PLATFORM `
+            -p:SelfContained=true `
+            -p:PublishSingleFile=false `
+            -p:PublishTrimmed=false `
+            -p:Version=$env:RELEASE_VERSION `
+            -p:FileVersion=$env:RELEASE_VERSION `
+            -p:InformationalVersion=$env:RELEASE_VERSION `
+            -p:PublishDir="$publishDir\\"
+
+      - name: Sign desktop app binaries with Artifact Signing
+        uses: azure/artifact-signing-action@v1
+        with:
+          # Keep these as repository/environment variables unless your org treats them as secrets.
+          endpoint: ${{ secrets.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ secrets.ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME }}
+          files-folder: ${{ github.workspace }}\StringifyDesktop\bin\x64\Release\net10.0-windows\win-x64\msixpublish
+          files-folder-filter: exe,dll
+          files-folder-recurse: true
+          files-folder-depth: 2
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Stage signed desktop app artifact
+        shell: pwsh
+        run: |
+          $publishDir = Join-Path $env:GITHUB_WORKSPACE $env:APP_PUBLISH_DIR
+          $stagingDir = Join-Path $env:GITHUB_WORKSPACE $env:DESKTOP_STAGING_DIR
+          $zipPath = Join-Path $stagingDir "StringifyDesktop-$($env:RELEASE_VERSION)-win-x64-signed.zip"
+
+          New-Item -ItemType Directory -Force -Path $stagingDir | Out-Null
+
+          if (Test-Path $zipPath) {
+            Remove-Item -LiteralPath $zipPath -Force
+          }
+
+          Compress-Archive -Path (Join-Path $publishDir '*') -DestinationPath $zipPath
+
+      - name: Stamp MSIX package version
+        shell: pwsh
+        run: |
+          $manifestPath = Join-Path $env:GITHUB_WORKSPACE $env:PACKAGE_MANIFEST
+          [xml]$manifest = Get-Content -LiteralPath $manifestPath
+          $manifest.Package.Identity.Version = $env:PACKAGE_VERSION
+          $manifest.Save($manifestPath)
+
+      - name: Restore packaging project
+        shell: pwsh
+        run: |
+          msbuild $env:PACKAGE_PROJECT /t:Restore /m /nologo `
+            /p:Configuration=$env:CONFIGURATION `
+            /p:Platform=$env:PLATFORM `
+            /p:RuntimeIdentifier=$env:RUNTIME_IDENTIFIER `
+            /p:PackageCertificateKeyFile= `
+            /p:PackageCertificateThumbprint=
+
+      - name: Build unsigned MSIX from signed app output
+        shell: pwsh
+        run: |
+          msbuild $env:PACKAGE_PROJECT /t:PrepareForRun /m /nologo /verbosity:minimal `
+            /p:Configuration=$env:CONFIGURATION `
+            /p:Platform=$env:PLATFORM `
+            /p:RuntimeIdentifier=$env:RUNTIME_IDENTIFIER `
+            /p:GenerateAppxPackageOnBuild=true `
+            /p:AppxPackageSigningEnabled=false `
+            /p:PackageCertificateKeyFile= `
+            /p:PackageCertificateThumbprint=
+
+      - name: Stage MSIX artifact
+        shell: pwsh
+        run: |
+          $appPackagesDir = Join-Path $env:GITHUB_WORKSPACE $env:INSTALLER_APP_PACKAGES_DIR
+          $stagingDir = Join-Path $env:GITHUB_WORKSPACE $env:PACKAGE_STAGING_DIR
+
+          New-Item -ItemType Directory -Force -Path $stagingDir | Out-Null
+
+          $package = Get-ChildItem -Path $appPackagesDir -Recurse -Filter *.appx |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+
+          if (-not $package) {
+            throw "No Appx package was produced by the packaging project."
+          }
+
+          $msixName = [System.IO.Path]::GetFileNameWithoutExtension($package.Name) + ".msix"
+          $msixPath = Join-Path $stagingDir $msixName
+
+          Copy-Item -LiteralPath $package.FullName -Destination $msixPath -Force
+
+          "MSIX_PATH=$msixPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Sign MSIX with Artifact Signing
+        uses: azure/artifact-signing-action@v1
+        with:
+          endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME }}
+          files: ${{ env.MSIX_PATH }}
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Upload signed desktop app
+        uses: actions/upload-artifact@v4
+        with:
+          name: stringify-desktop-win-x64-signed
+          path: ${{ env.DESKTOP_STAGING_DIR }}
+          if-no-files-found: error
+
+      - name: Upload signed MSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: stringify-desktop-msix-signed
+          path: ${{ env.PACKAGE_STAGING_DIR }}
+          if-no-files-found: error
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v$($env:RELEASE_VERSION)"
+          $releaseTitle = $env:RELEASE_VERSION
+          $releaseNotes = @"
+          Automated release for build $($env:BUILD_NUMBER).
+
+          Desktop app version: $($env:RELEASE_VERSION)
+          MSIX package version: $($env:PACKAGE_VERSION)
+          "@
+
+          $assets = @()
+          $assets += (Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE $env:DESKTOP_STAGING_DIR) -File).FullName
+          $assets += (Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE $env:PACKAGE_STAGING_DIR) -File).FullName
+
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @assets --clobber
+          }
+          else {
+            gh release create $tag @assets --title $releaseTitle --notes $releaseNotes
+          }
