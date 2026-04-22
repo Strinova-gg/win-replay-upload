@@ -55,6 +55,7 @@
     <AppxBundle>Never</AppxBundle>
     <AppxSymbolPackageEnabled>false</AppxSymbolPackageEnabled>
     <PackageCertificateKeyFile></PackageCertificateKeyFile>
+    <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
   </PropertyGroup>
   <Import Project="$(WapProjPath)\Microsoft.DesktopBridge.props" />
   <PropertyGroup>

@@ -82,7 +82,7 @@ jobs:
             -p:InformationalVersion=$env:RELEASE_VERSION `
             -p:PublishDir="$publishDir\\"
 
-      - name: Sign desktop app binaries with Artifact Signing
+      - name: Sign desktop app and third-party binaries with Artifact Signing
         uses: azure/artifact-signing-action@v1
         with:
           # Keep these as repository/environment variables unless your org treats them as secrets.
@@ -90,9 +90,7 @@ jobs:
           signing-account-name: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT_NAME }}
           certificate-profile-name: ${{ secrets.ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME }}
           files-folder: ${{ github.workspace }}\StringifyDesktop\bin\x64\Release\net10.0-windows\win-x64\msixpublish
-          files-folder-filter: exe,dll
-          files-folder-recurse: true
-          files-folder-depth: 2
+          files-folder-filter: StringifyDesktop.exe,StringifyDesktop.dll,Avalonia*.dll,Sentry.dll,SukiUI.dll,SkiaSharp.dll,HarfBuzzSharp.dll,libSkiaSharp.dll,libHarfBuzzSharp.dll,MicroCom*.dll,Accessibility.dll,Tmds.DBus.Protocol.dll,System.Linq.Dynamic.Core.dll,av_*.dll
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
@@ -130,10 +128,10 @@ jobs:
             /p:PackageCertificateKeyFile= `
             /p:PackageCertificateThumbprint=
 
-      - name: Build unsigned MSIX from signed app output
+      - name: Build unsigned MSIX
         shell: pwsh
         run: |
-          msbuild $env:PACKAGE_PROJECT /t:PrepareForRun /m /nologo /verbosity:minimal `
+          msbuild $env:PACKAGE_PROJECT /t:Build /m /nologo /verbosity:minimal `
             /p:Configuration=$env:CONFIGURATION `
             /p:Platform=$env:PLATFORM `
             /p:RuntimeIdentifier=$env:RUNTIME_IDENTIFIER `
