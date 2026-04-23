@@ -89,6 +89,78 @@ public sealed class MainViewModelTests
         }
     }
 
+    [Fact]
+    public async Task SyncDirectoryAsync_DeletesReplayAfterSuccessfulSync_WhenEnabled()
+    {
+        var tempRoot = CreateTempDirectory();
+        var replayDirectory = Path.Combine(tempRoot, "Replays");
+        Directory.CreateDirectory(replayDirectory);
+
+        var replayPath = Path.Combine(replayDirectory, "delete-me.replay");
+        await File.WriteAllBytesAsync(replayPath, ReplayFileTestData.CreateReplayBytes(headerMagic: ReplayFileTestData.NetworkDemoMagic));
+
+        try
+        {
+            var paths = new AppPaths(tempRoot);
+            var configuration = new AppConfiguration(
+                "https://backend.example.invalid",
+                "https://issuer.example.invalid",
+                "client-id",
+                "profile email",
+                "stringify-gg://auth/callback",
+                replayDirectory);
+            var clock = new SystemClock();
+            var settingsStore = new SettingsStore(paths);
+            var uploadLogStore = new UploadLogStore(paths);
+            var protectedFileStore = new ProtectedFileStore(paths);
+
+            await settingsStore.InitializeAsync();
+            await settingsStore.UpdateAsync(deleteAfterUploadEnabled: true);
+            await uploadLogStore.InitializeAsync();
+            await protectedFileStore.SaveSessionAsync(new OAuthSession(
+                "token",
+                null,
+                null,
+                "Bearer",
+                "profile email",
+                DateTimeOffset.UtcNow.AddHours(1),
+                new DesktopAuthUser("user-1", "user@example.com", true, "User", "user", null)));
+
+            var authService = new AuthService(configuration, protectedFileStore, clock);
+            await authService.InitializeAsync();
+
+            var uploadService = new UploadService(
+                authService,
+                new FakeUploadRoutingClient(_ => Task.FromResult<(string, string, IReadOnlyDictionary<string, string>)>(
+                    ("https://upload.example.invalid/replay", "PUT", new Dictionary<string, string>()))),
+                new HttpClient(new StubHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK))));
+
+            var viewModel = new MainViewModel(
+                configuration,
+                new UiDispatcher(),
+                new ProtocolRegistrationService(configuration),
+                null!,
+                clock,
+                settingsStore,
+                uploadLogStore,
+                protectedFileStore,
+                authService,
+                null!,
+                uploadService,
+                new ReplayWatcherService(),
+                new FilePickerService());
+
+            await viewModel.SyncDirectoryAsync(replayDirectory);
+
+            Assert.False(File.Exists(replayPath));
+            Assert.Equal(UploadStatus.Uploaded, uploadLogStore.GetStatus("delete-me.replay")?.Status);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, true);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), $"StringifyDesktop.Tests.{Guid.NewGuid():N}");

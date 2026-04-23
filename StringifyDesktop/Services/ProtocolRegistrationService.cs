@@ -14,21 +14,29 @@ public sealed class ProtocolRegistrationService
 
     public void EnsureRegistered()
     {
-        var callback = new Uri(configuration.OAuthCallbackUri);
-        var executablePath = Environment.ProcessPath;
-        if (string.IsNullOrWhiteSpace(executablePath))
+        try
         {
-            return;
+            var callback = new Uri(configuration.OAuthCallbackUri);
+            var executablePath = Environment.ProcessPath;
+            if (string.IsNullOrWhiteSpace(executablePath))
+            {
+                return;
+            }
+
+            using var key = Registry.CurrentUser.CreateSubKey($@"Software\Classes\{callback.Scheme}");
+            key?.SetValue(string.Empty, "URL:Stringify Desktop Protocol");
+            key?.SetValue("URL Protocol", string.Empty);
+
+            using var iconKey = key?.CreateSubKey("DefaultIcon");
+            iconKey?.SetValue(string.Empty, $"\"{executablePath}\",0");
+
+            using var commandKey = key?.CreateSubKey(@"shell\open\command");
+            commandKey?.SetValue(string.Empty, $"\"{executablePath}\" \"%1\"");
         }
-
-        using var key = Registry.CurrentUser.CreateSubKey($@"Software\Classes\{callback.Scheme}");
-        key?.SetValue(string.Empty, "URL:Stringify Desktop Protocol");
-        key?.SetValue("URL Protocol", string.Empty);
-
-        using var iconKey = key?.CreateSubKey("DefaultIcon");
-        iconKey?.SetValue(string.Empty, $"\"{executablePath}\",0");
-
-        using var commandKey = key?.CreateSubKey(@"shell\open\command");
-        commandKey?.SetValue(string.Empty, $"\"{executablePath}\" \"%1\"");
+        catch
+        {
+            // Packaged installs register the protocol in the app manifest, so registry registration
+            // is best-effort for unpackaged builds only.
+        }
     }
 }

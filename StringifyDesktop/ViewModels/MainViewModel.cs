@@ -28,6 +28,7 @@ public sealed class MainViewModel : ViewModelBase, IAsyncDisposable
     private bool initialized;
     private bool isBusy;
     private bool isOpeningBrowser;
+    private bool isSettingsView;
     private string watchDirectoryInput = string.Empty;
     private bool watching;
     private string? activeWatchDirectory;
@@ -62,17 +63,21 @@ public sealed class MainViewModel : ViewModelBase, IAsyncDisposable
         this.uploadService = uploadService;
         this.replayWatcherService = replayWatcherService;
         this.filePickerService = filePickerService;
+        settings = settingsStore.Get();
 
         SignInCommand = new AsyncCommand(StartSignInAsync, () => !IsAuthBusy);
         SignOutCommand = new AsyncCommand(SignOutAsync, () => IsSignedIn);
         SaveWatchDirectoryCommand = new AsyncCommand(SaveWatchDirectoryAsync, () => IsSignedIn);
         ChooseFolderCommand = new AsyncCommand(ChooseFolderAsync, () => IsSignedIn);
         ToggleAutoSyncCommand = new AsyncCommand(ToggleAutoSyncAsync, () => IsSignedIn);
+        ToggleDeleteAfterUploadCommand = new AsyncCommand(ToggleDeleteAfterUploadAsync, () => IsSignedIn);
         ManualSyncCommand = new AsyncCommand(ManualSyncAsync, () => IsSignedIn && !IsBusy);
         PickFilesCommand = new AsyncCommand(PickFilesAsync, () => IsSignedIn && !IsBusy);
         RetryFailedCommand = new AsyncCommand(RetryFailedAsync, () => IsSignedIn && !IsBusy && FailedCount > 0);
         ClearFailedCommand = new AsyncCommand(ClearFailedAsync, () => FailedCount > 0);
         ExportLogCommand = new AsyncCommand(ExportLogAsync);
+        ShowDashboardCommand = new RelayCommand(() => IsSettingsView = false, () => IsSettingsView);
+        ShowSettingsCommand = new RelayCommand(() => IsSettingsView = true, () => IsDashboardView);
 
         HistoryRows = new ObservableCollection<UploadHistoryRow>();
     }
@@ -93,6 +98,8 @@ public sealed class MainViewModel : ViewModelBase, IAsyncDisposable
 
     public AsyncCommand ToggleAutoSyncCommand { get; }
 
+    public AsyncCommand ToggleDeleteAfterUploadCommand { get; }
+
     public AsyncCommand ManualSyncCommand { get; }
 
     public AsyncCommand PickFilesCommand { get; }
@@ -102,6 +109,10 @@ public sealed class MainViewModel : ViewModelBase, IAsyncDisposable
     public AsyncCommand ClearFailedCommand { get; }
 
     public AsyncCommand ExportLogCommand { get; }
+
+    public RelayCommand ShowDashboardCommand { get; }
+
+    public RelayCommand ShowSettingsCommand { get; }
 
     public bool IsSignedIn => authService.Session is not null;
 
@@ -130,6 +141,23 @@ public sealed class MainViewModel : ViewModelBase, IAsyncDisposable
     }
 
     public bool AutoSyncEnabled => settings.AutoSyncEnabled;
+
+    public bool DeleteAfterUploadEnabled => settings.DeleteAfterUploadEnabled;
+
+    public bool IsSettingsView
+    {
+        get => isSettingsView;
+        private set
+        {
+            if (SetProperty(ref isSettingsView, value))
+            {
+                OnPropertyChanged(nameof(IsDashboardView));
+                RefreshComputedState();
+            }
+        }
+    }
+
+    public bool IsDashboardView => !IsSettingsView;
 
     public bool Watching
     {
@@ -278,6 +306,7 @@ public sealed class MainViewModel : ViewModelBase, IAsyncDisposable
         await replayWatcherService.StopAsync();
         Watching = false;
         activeWatchDirectory = null;
+        IsSettingsView = false;
         await authService.SignOutAsync();
         SyncAuthState();
     }
@@ -313,6 +342,12 @@ public sealed class MainViewModel : ViewModelBase, IAsyncDisposable
         settings = await settingsStore.UpdateAsync(autoSyncEnabled: !settings.AutoSyncEnabled);
         RefreshComputedState();
         await ReconcileWatcherAsync();
+    }
+
+    private async Task ToggleDeleteAfterUploadAsync()
+    {
+        settings = await settingsStore.UpdateAsync(deleteAfterUploadEnabled: !settings.DeleteAfterUploadEnabled);
+        RefreshComputedState();
     }
 
     private async Task ManualSyncAsync()
@@ -431,11 +466,12 @@ public sealed class MainViewModel : ViewModelBase, IAsyncDisposable
             }
 
             var outcome = await uploadService.UploadReplayAsync(filePath, fileName);
+            var detail = TryDeleteUploadedReplay(filePath, outcome);
 
             UploadLogEntry entry = outcome switch
             {
-                UploadOutcome.Uploaded => new(UploadStatus.Uploaded, clock.UtcNow),
-                UploadOutcome.AlreadyUploaded alreadyUploaded => new(UploadStatus.AlreadyUploaded, clock.UtcNow, HttpStatus: alreadyUploaded.HttpStatus),
+                UploadOutcome.Uploaded => new(UploadStatus.Uploaded, clock.UtcNow, Detail: detail),
+                UploadOutcome.AlreadyUploaded alreadyUploaded => new(UploadStatus.AlreadyUploaded, clock.UtcNow, HttpStatus: alreadyUploaded.HttpStatus, Detail: detail),
                 UploadOutcome.Failed failed => new(UploadStatus.Failed, clock.UtcNow, failed.Error, failed.HttpStatus),
                 _ => new(UploadStatus.Failed, clock.UtcNow, "Unknown upload result")
             };
@@ -531,6 +567,11 @@ public sealed class MainViewModel : ViewModelBase, IAsyncDisposable
 
     private void SyncAuthState()
     {
+        if (!IsSignedIn && IsSettingsView)
+        {
+            IsSettingsView = false;
+        }
+
         AuthStatus = authService.CallbackMessage
             ?? (IsSignedIn ? "Signed in and ready to sync replays." : "Sign in to start syncing replays.");
         AuthError = authService.CallbackError;
@@ -618,7 +659,7 @@ public sealed class MainViewModel : ViewModelBase, IAsyncDisposable
                 pair.Key,
                 pair.Value.Status,
                 pair.Value.At,
-                pair.Value.Error ?? (pair.Value.HttpStatus is int status ? $"HTTP {status}" : null)))
+                pair.Value.Detail ?? pair.Value.Error ?? (pair.Value.HttpStatus is int status ? $"HTTP {status}" : null)))
             .OrderByDescending(static row => row.At)
             .ToArray();
 
@@ -659,6 +700,28 @@ public sealed class MainViewModel : ViewModelBase, IAsyncDisposable
             ? settings.WatchDir ?? configuration.DefaultReplayFolder
             : WatchDirectoryInput.Trim();
 
+    private string? TryDeleteUploadedReplay(string filePath, UploadOutcome outcome)
+    {
+        if (!settings.DeleteAfterUploadEnabled || outcome is not (UploadOutcome.Uploaded or UploadOutcome.AlreadyUploaded))
+        {
+            return null;
+        }
+
+        try
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+
+            return null;
+        }
+        catch (Exception error)
+        {
+            return $"Could not delete local replay: {error.Message}";
+        }
+    }
+
     private static bool ShouldSkip(UploadLogEntry? entry)
     {
         return entry?.Status is UploadStatus.Uploaded or UploadStatus.AlreadyUploaded;
@@ -671,15 +734,19 @@ public sealed class MainViewModel : ViewModelBase, IAsyncDisposable
         SaveWatchDirectoryCommand.RaiseCanExecuteChanged();
         ChooseFolderCommand.RaiseCanExecuteChanged();
         ToggleAutoSyncCommand.RaiseCanExecuteChanged();
+        ToggleDeleteAfterUploadCommand.RaiseCanExecuteChanged();
         ManualSyncCommand.RaiseCanExecuteChanged();
         PickFilesCommand.RaiseCanExecuteChanged();
         RetryFailedCommand.RaiseCanExecuteChanged();
         ClearFailedCommand.RaiseCanExecuteChanged();
         ExportLogCommand.RaiseCanExecuteChanged();
+        ShowDashboardCommand.RaiseCanExecuteChanged();
+        ShowSettingsCommand.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(IsAuthBusy));
         OnPropertyChanged(nameof(SignInButtonText));
         OnPropertyChanged(nameof(AutoSyncEnabled));
         OnPropertyChanged(nameof(AutoSyncStatusText));
+        OnPropertyChanged(nameof(DeleteAfterUploadEnabled));
         OnPropertyChanged(nameof(ShouldOfferTrayOnClose));
     }
 }

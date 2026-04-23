@@ -44,12 +44,17 @@ public sealed class SettingsStore
         return current;
     }
 
-    public async Task<AppSettings> UpdateAsync(bool? autoSyncEnabled = null, string? watchDir = null, bool clearWatchDir = false)
+    public async Task<AppSettings> UpdateAsync(
+        bool? autoSyncEnabled = null,
+        string? watchDir = null,
+        bool clearWatchDir = false,
+        bool? deleteAfterUploadEnabled = null)
     {
         current = current with
         {
             AutoSyncEnabled = autoSyncEnabled ?? current.AutoSyncEnabled,
-            WatchDir = clearWatchDir ? null : watchDir ?? current.WatchDir
+            WatchDir = clearWatchDir ? null : watchDir ?? current.WatchDir,
+            DeleteAfterUploadEnabled = deleteAfterUploadEnabled ?? current.DeleteAfterUploadEnabled
         };
 
         await PersistAsync();

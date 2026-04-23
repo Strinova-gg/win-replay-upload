@@ -14,15 +14,20 @@ public sealed class PersistenceTests
             var store = new SettingsStore(new AppPaths(tempRoot));
             await store.InitializeAsync();
 
-            var updated = await store.UpdateAsync(autoSyncEnabled: false, watchDir: @"C:\Replays");
+            var updated = await store.UpdateAsync(
+                autoSyncEnabled: false,
+                watchDir: @"C:\Replays",
+                deleteAfterUploadEnabled: true);
 
             Assert.False(updated.AutoSyncEnabled);
             Assert.Equal(@"C:\Replays", updated.WatchDir);
+            Assert.True(updated.DeleteAfterUploadEnabled);
 
             var reloaded = new SettingsStore(new AppPaths(tempRoot));
             await reloaded.InitializeAsync();
             Assert.False(reloaded.Get().AutoSyncEnabled);
             Assert.Equal(@"C:\Replays", reloaded.Get().WatchDir);
+            Assert.True(reloaded.Get().DeleteAfterUploadEnabled);
         }
         finally
         {

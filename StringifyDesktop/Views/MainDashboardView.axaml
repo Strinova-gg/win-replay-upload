@@ -7,7 +7,7 @@
     xmlns:dg="clr-namespace:Avalonia.Controls;assembly=Avalonia.Controls.DataGrid"
     mc:Ignorable="d">
     <ScrollViewer>
-        <Grid Margin="24" RowDefinitions="Auto,Auto,Auto,*" RowSpacing="18">
+        <Grid Margin="24" RowDefinitions="Auto,Auto,*" RowSpacing="18">
             <Border
                 Grid.Row="0"
                 Padding="18"
@@ -16,20 +16,28 @@
                 IsVisible="{Binding IsSignedIn}">
                 <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
                     <TextBlock FontSize="28" FontWeight="SemiBold" Text="Stringify Desktop" />
-                    <StackPanel Grid.Column="1" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="10">
-                        <TextBlock VerticalAlignment="Center" Text="{Binding UserLabel}" />
-                        <Button Command="{Binding SignOutCommand}" Content="Sign out" />
+                    <StackPanel Grid.Column="1" HorizontalAlignment="Right" Spacing="8">
+                        <TextBlock HorizontalAlignment="Right" Opacity="0.82" Text="{Binding UserLabel}" />
+                        <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="10">
+                            <Button Command="{Binding ShowDashboardCommand}" Content="Overview" />
+                            <Button Command="{Binding ShowSettingsCommand}" ToolTip.Tip="Settings">
+                                <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="18" Text="&#xE713;" />
+                            </Button>
+                            <Button Command="{Binding SignOutCommand}" Content="Sign out" />
+                        </StackPanel>
                     </StackPanel>
                     <TextBlock
                         Grid.Row="1"
+                        Grid.ColumnSpan="2"
                         Margin="0,10,0,0"
                         Opacity="0.8"
-                        Text="Automatic replay uploads with secure browser sign-in and tray syncing." />
+                        Text="Automatic replay uploads with secure browser sign-in, a focused dashboard, and tidy automation controls."
+                        TextWrapping="Wrap" />
                 </Grid>
             </Border>
 
             <Border
-                Grid.Row="1"
+                Grid.Row="0"
                 Padding="28"
                 CornerRadius="22"
                 MaxWidth="560"
@@ -68,78 +76,169 @@
             </Border>
 
             <ProgressBar
-                Grid.Row="2"
+                Grid.Row="1"
                 Height="6"
                 IsIndeterminate="True"
                 IsVisible="{Binding IsBusy}" />
 
-            <Grid
-                Grid.Row="3"
-                ColumnDefinitions="3*,2*"
-                ColumnSpacing="18"
+            <StackPanel
+                Grid.Row="2"
+                Spacing="18"
                 IsVisible="{Binding IsSignedIn}">
-                <StackPanel Grid.Column="0" Spacing="18">
-                    <Border Padding="18" CornerRadius="18" Background="#10161D">
-                        <StackPanel Spacing="14">
-                            <TextBlock FontSize="20" FontWeight="SemiBold" Text="Folder" />
-                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                                <TextBox Grid.Column="0" Text="{Binding WatchDirectoryInput}" />
-                                <Button Grid.Column="1" Command="{Binding SaveWatchDirectoryCommand}" Content="Save folder" />
-                                <Button Grid.Column="2" Command="{Binding ChooseFolderCommand}" Content="Choose folder..." />
-                            </Grid>
-                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                <Button Command="{Binding ToggleAutoSyncCommand}" Content="Toggle auto-sync" />
-                                <Button Command="{Binding ManualSyncCommand}" Content="Manual sync now" />
-                                <Button Command="{Binding PickFilesCommand}" Content="Pick .replay file(s)..." />
-                            </StackPanel>
-                            <TextBlock Text="{Binding AutoSyncStatusText, StringFormat=Auto-sync: {0}}" />
-                            <TextBlock Text="{Binding WatcherStatusText, StringFormat=Watcher: {0}}" />
-                            <TextBlock
-                                IsVisible="{Binding ShouldOfferTrayOnClose}"
-                                Opacity="0.8"
-                                Text="Closing the window will ask whether to quit, minimize to the tray, or cancel." />
+                <Border
+                    Padding="18"
+                    CornerRadius="18"
+                    Background="#10161D"
+                    IsVisible="{Binding IsDashboardView}">
+                    <StackPanel Spacing="14">
+                        <TextBlock FontSize="20" FontWeight="SemiBold" Text="Sync source" />
+                        <TextBlock
+                            Opacity="0.8"
+                            Text="Choose the replay folder once, then sync manually when you need to or let auto-sync watch it for you."
+                            TextWrapping="Wrap" />
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                            <TextBox Grid.Column="0" Text="{Binding WatchDirectoryInput}" />
+                            <Button Grid.Column="1" Command="{Binding SaveWatchDirectoryCommand}" Content="Save folder" />
+                            <Button Grid.Column="2" Command="{Binding ChooseFolderCommand}" Content="Choose folder..." />
+                        </Grid>
+                        <WrapPanel ItemSpacing="10" LineSpacing="10">
+                            <Button Command="{Binding ManualSyncCommand}" Content="Manual sync now" />
+                            <Button Command="{Binding PickFilesCommand}" Content="Pick .replay file(s)..." />
+                        </WrapPanel>
+                        <WrapPanel ItemSpacing="12" LineSpacing="12">
+                            <Border Padding="10,6" CornerRadius="999" Background="#17212B">
+                                <TextBlock Text="{Binding AutoSyncStatusText, StringFormat=Auto-sync {0}}" />
+                            </Border>
+                            <Border Padding="10,6" CornerRadius="999" Background="#17212B">
+                                <TextBlock Text="{Binding WatcherStatusText, StringFormat=Watcher {0}}" />
+                            </Border>
+                        </WrapPanel>
+                        <TextBlock
+                            IsVisible="{Binding ShouldOfferTrayOnClose}"
+                            Opacity="0.8"
+                            Text="Closing the window will ask whether to quit, minimize to the tray, or cancel."
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <WrapPanel
+                    ItemSpacing="12"
+                    LineSpacing="12"
+                    IsVisible="{Binding IsDashboardView}">
+                    <Border MinWidth="160" Padding="18" CornerRadius="18" Background="#10161D">
+                        <StackPanel Spacing="6">
+                            <TextBlock Opacity="0.75" Text="Total processed" />
+                            <TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding TotalCount}" />
                         </StackPanel>
                     </Border>
+                    <Border MinWidth="160" Padding="18" CornerRadius="18" Background="#10161D">
+                        <StackPanel Spacing="6">
+                            <TextBlock Opacity="0.75" Text="Uploaded" />
+                            <TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding UploadedCount}" />
+                        </StackPanel>
+                    </Border>
+                    <Border MinWidth="160" Padding="18" CornerRadius="18" Background="#10161D">
+                        <StackPanel Spacing="6">
+                            <TextBlock Opacity="0.75" Text="Already uploaded" />
+                            <TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding AlreadyUploadedCount}" />
+                        </StackPanel>
+                    </Border>
+                    <Border MinWidth="160" Padding="18" CornerRadius="18" Background="#10161D">
+                        <StackPanel Spacing="6">
+                            <TextBlock Opacity="0.75" Text="Failed" />
+                            <TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding FailedCount}" />
+                        </StackPanel>
+                    </Border>
+                </WrapPanel>
 
-                    <Border Padding="18" CornerRadius="18" Background="#10161D">
-                        <StackPanel Spacing="14">
+                <Border
+                    Padding="18"
+                    CornerRadius="18"
+                    Background="#10161D"
+                    IsVisible="{Binding IsDashboardView}">
+                    <Grid RowDefinitions="Auto,*" RowSpacing="14">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
                             <TextBlock FontSize="20" FontWeight="SemiBold" Text="Upload history" />
-                            <dg:DataGrid
-                                AutoGenerateColumns="False"
-                                CanUserResizeColumns="True"
-                                HeadersVisibility="Column"
-                                Height="280"
-                                ItemsSource="{Binding HistoryRows}">
-                                <dg:DataGrid.Columns>
-                                    <dg:DataGridTextColumn Binding="{Binding FileName}" Header="File" IsReadOnly="True" Width="2*" />
-                                    <dg:DataGridTextColumn Binding="{Binding StatusText}" Header="Status" IsReadOnly="True" Width="*" />
-                                    <dg:DataGridTextColumn Binding="{Binding WhenText}" Header="When" IsReadOnly="True" Width="*" />
-                                    <dg:DataGridTextColumn Binding="{Binding Detail}" Header="Detail" IsReadOnly="True" Width="2*" />
-                                </dg:DataGrid.Columns>
-                            </dg:DataGrid>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-
-                <StackPanel Grid.Column="1" Spacing="18">
-                    <Border Padding="18" CornerRadius="18" Background="#10161D">
-                        <StackPanel Spacing="14">
-                            <TextBlock FontSize="20" FontWeight="SemiBold" Text="Stats" />
-                            <WrapPanel ItemSpacing="12" LineSpacing="6">
-                                <TextBlock Text="{Binding TotalCount, StringFormat=Total: {0}}" />
-                                <TextBlock Text="{Binding UploadedCount, StringFormat=Uploaded: {0}}" />
-                                <TextBlock Text="{Binding AlreadyUploadedCount, StringFormat=Already uploaded: {0}}" />
-                                <TextBlock Text="{Binding FailedCount, StringFormat=Failed: {0}}" />
-                            </WrapPanel>
-                            <WrapPanel ItemSpacing="10" LineSpacing="10">
+                            <WrapPanel Grid.Column="1" ItemSpacing="10" LineSpacing="10">
                                 <Button Command="{Binding RetryFailedCommand}" Content="Retry failed" />
                                 <Button Command="{Binding ClearFailedCommand}" Content="Clear failed entries" />
                                 <Button Command="{Binding ExportLogCommand}" Content="Export log" />
                             </WrapPanel>
+                        </Grid>
+                        <dg:DataGrid
+                            Grid.Row="1"
+                            AutoGenerateColumns="False"
+                            CanUserResizeColumns="True"
+                            HeadersVisibility="Column"
+                            Height="320"
+                            ItemsSource="{Binding HistoryRows}">
+                            <dg:DataGrid.Columns>
+                                <dg:DataGridTextColumn Binding="{Binding FileName}" Header="File" IsReadOnly="True" Width="2*" />
+                                <dg:DataGridTextColumn Binding="{Binding StatusText}" Header="Status" IsReadOnly="True" Width="*" />
+                                <dg:DataGridTextColumn Binding="{Binding WhenText}" Header="When" IsReadOnly="True" Width="*" />
+                                <dg:DataGridTextColumn Binding="{Binding Detail}" Header="Detail" IsReadOnly="True" Width="2*" />
+                            </dg:DataGrid.Columns>
+                        </dg:DataGrid>
+                    </Grid>
+                </Border>
+
+                <Border
+                    Padding="24"
+                    CornerRadius="18"
+                    Background="#10161D"
+                    IsVisible="{Binding IsSettingsView}">
+                    <StackPanel Spacing="18">
+                        <StackPanel Spacing="6">
+                            <TextBlock FontSize="22" FontWeight="SemiBold" Text="Settings" />
+                            <TextBlock
+                                Opacity="0.8"
+                                Text="Keep automation preferences here so the overview stays focused on syncing and upload history."
+                                TextWrapping="Wrap" />
                         </StackPanel>
-                    </Border>
-                </StackPanel>
-            </Grid>
+
+                        <Border Padding="18" CornerRadius="16" Background="#131A22">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="18">
+                                <StackPanel Spacing="6">
+                                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="Auto-sync new replays" />
+                                    <TextBlock
+                                        Opacity="0.8"
+                                        Text="Watch the selected folder, upload new replays automatically, and keep tray syncing available."
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                                <CheckBox
+                                    Grid.Column="1"
+                                    VerticalAlignment="Center"
+                                    Command="{Binding ToggleAutoSyncCommand}"
+                                    Content="Enabled"
+                                    IsChecked="{Binding AutoSyncEnabled, Mode=OneWay}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Padding="18" CornerRadius="16" Background="#131A22">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="18">
+                                <StackPanel Spacing="6">
+                                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="Delete local replay after sync" />
+                                    <TextBlock
+                                        Opacity="0.8"
+                                        Text="After Stringify uploads a replay, or confirms it already exists, remove the local file to keep the folder tidy."
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                                <CheckBox
+                                    Grid.Column="1"
+                                    VerticalAlignment="Center"
+                                    Command="{Binding ToggleDeleteAfterUploadCommand}"
+                                    Content="Enabled"
+                                    IsChecked="{Binding DeleteAfterUploadEnabled, Mode=OneWay}" />
+                            </Grid>
+                        </Border>
+
+                        <TextBlock
+                            Opacity="0.75"
+                            Text="Folder selection and manual sync actions still live on the overview page."
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
         </Grid>
     </ScrollViewer>
 </UserControl>
