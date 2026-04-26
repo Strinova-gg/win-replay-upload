@@ -370,10 +370,7 @@ public sealed class MainViewModel : ViewModelBase, IAsyncDisposable
         await RunBusyAsync(async () =>
         {
             var files = await filePickerService.PickReplayFilesAsync(ResolvedWatchDirectory);
-            foreach (var file in files)
-            {
-                await ProcessReplayAsync(file);
-            }
+            await ProcessReplaysAsync(files);
         });
     }
 
@@ -394,15 +391,11 @@ public sealed class MainViewModel : ViewModelBase, IAsyncDisposable
             var knownFiles = (await replayWatcherService.ScanAsync(ResolvedWatchDirectory))
                 .ToDictionary(static path => Path.GetFileName(path), static path => path, StringComparer.OrdinalIgnoreCase);
 
-            foreach (var name in failed)
-            {
-                if (!knownFiles.TryGetValue(name, out var path))
-                {
-                    continue;
-                }
-
-                await ProcessReplayAsync(path);
-            }
+            await ProcessReplaysAsync(
+                failed
+                    .Where(knownFiles.ContainsKey)
+                    .Select(name => knownFiles[name])
+                    .ToArray());
         });
     }
 
@@ -425,26 +418,36 @@ public sealed class MainViewModel : ViewModelBase, IAsyncDisposable
     internal async Task SyncDirectoryAsync(string directory)
     {
         var files = await replayWatcherService.ScanAsync(directory);
-        foreach (var file in files)
-        {
-            await ProcessReplayAsync(file);
-        }
+        await ProcessReplaysAsync(files);
     }
 
     private async Task ProcessReplayAsync(string filePath)
     {
-        var fileName = Path.GetFileName(filePath);
-        if (string.IsNullOrWhiteSpace(fileName))
+        await ProcessReplaysAsync([filePath]);
+    }
+
+    private async Task ProcessReplaysAsync(IEnumerable<string> filePaths)
+    {
+        var pending = filePaths
+            .Select(static path => new PendingReplay(path, Path.GetFileName(path)))
+            .Where(static replay => !string.IsNullOrWhiteSpace(replay.FileName))
+            .DistinctBy(static replay => replay.FileName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (pending.Length == 0)
         {
             return;
         }
 
+        var reserved = new List<PendingReplay>(pending.Length);
         await syncGate.WaitAsync();
         try
         {
-            if (!inFlight.Add(fileName))
+            foreach (var replay in pending)
             {
-                return;
+                if (inFlight.Add(replay.FileName))
+                {
+                    reserved.Add(replay);
+                }
             }
         }
         finally
@@ -459,42 +462,47 @@ public sealed class MainViewModel : ViewModelBase, IAsyncDisposable
                 return;
             }
 
-            var existing = uploadLogStore.GetStatus(fileName);
-            if (ShouldSkip(existing))
+            var readyToUpload = reserved
+                .Where(replay => !ShouldSkip(uploadLogStore.GetStatus(replay.FileName)))
+                .ToArray();
+            if (readyToUpload.Length == 0)
             {
                 return;
             }
 
-            var outcome = await uploadService.UploadReplayAsync(filePath, fileName);
-            var detail = TryDeleteUploadedReplay(filePath, outcome);
+            var outcomes = await uploadService.UploadReplaysAsync(
+                readyToUpload
+                    .Select(static replay => (replay.FilePath, replay.FileName))
+                    .ToArray());
 
-            UploadLogEntry entry = outcome switch
+            foreach (var replay in readyToUpload)
             {
-                UploadOutcome.Uploaded => new(UploadStatus.Uploaded, clock.UtcNow, Detail: detail),
-                UploadOutcome.AlreadyUploaded alreadyUploaded => new(UploadStatus.AlreadyUploaded, clock.UtcNow, HttpStatus: alreadyUploaded.HttpStatus, Detail: detail),
-                UploadOutcome.Failed failed => new(UploadStatus.Failed, clock.UtcNow, failed.Error, failed.HttpStatus),
-                _ => new(UploadStatus.Failed, clock.UtcNow, "Unknown upload result")
-            };
+                var outcome = outcomes.GetValueOrDefault(replay.FileName)
+                    ?? new UploadOutcome.Failed("Upload service did not return an outcome.");
+                var detail = TryDeleteUploadedReplay(replay.FilePath, outcome);
 
-            await uploadLogStore.SetAsync(fileName, entry);
-            LoadHistoryFromStore();
+                UploadLogEntry entry = outcome switch
+                {
+                    UploadOutcome.Uploaded => new(UploadStatus.Uploaded, clock.UtcNow, Detail: detail),
+                    UploadOutcome.AlreadyUploaded alreadyUploaded => new(UploadStatus.AlreadyUploaded, clock.UtcNow, HttpStatus: alreadyUploaded.HttpStatus, Detail: detail),
+                    UploadOutcome.Failed failed => new(UploadStatus.Failed, clock.UtcNow, failed.Error, failed.HttpStatus),
+                    _ => new(UploadStatus.Failed, clock.UtcNow, "Unknown upload result")
+                };
 
-            switch (outcome)
-            {
-                case UploadOutcome.Uploaded:
-                    break;
-                case UploadOutcome.AlreadyUploaded:
-                    break;
-                case UploadOutcome.Failed:
-                    break;
+                await uploadLogStore.SetAsync(replay.FileName, entry);
             }
+
+            LoadHistoryFromStore();
         }
         finally
         {
             await syncGate.WaitAsync();
             try
             {
-                inFlight.Remove(fileName);
+                foreach (var replay in reserved)
+                {
+                    inFlight.Remove(replay.FileName);
+                }
             }
             finally
             {
@@ -749,4 +757,8 @@ public sealed class MainViewModel : ViewModelBase, IAsyncDisposable
         OnPropertyChanged(nameof(DeleteAfterUploadEnabled));
         OnPropertyChanged(nameof(ShouldOfferTrayOnClose));
     }
+
+    private sealed record PendingReplay(
+        string FilePath,
+        string FileName);
 }

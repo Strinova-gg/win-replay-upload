@@ -2,9 +2,10 @@ namespace StringifyDesktop.Services;
 
 public interface IUploadRoutingClient
 {
-    Task<(string UploadUrl, string Method, IReadOnlyDictionary<string, string> Headers)> RequestUploadUrlAsync(
-        string fileName,
-        long fileSize,
+    int MaxBatchSize { get; }
+
+    Task<IReadOnlyList<UploadRouteResult>> RequestUploadUrlsAsync(
+        IReadOnlyList<UploadRouteRequest> files,
         string bearerToken,
         CancellationToken cancellationToken = default);
 }

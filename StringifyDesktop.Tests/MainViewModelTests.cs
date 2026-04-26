@@ -49,14 +49,20 @@ public sealed class MainViewModelTests
             var authService = new AuthService(configuration, protectedFileStore, clock);
             await authService.InitializeAsync();
 
-            var requestedFiles = new List<string>();
+            var requestedBatches = new List<string[]>();
             var uploadService = new UploadService(
                 authService,
-                new FakeUploadRoutingClient(args =>
+                new FakeUploadRoutingClient((files, _) =>
                 {
-                    requestedFiles.Add(args.FileName);
-                    return Task.FromResult<(string, string, IReadOnlyDictionary<string, string>)>(
-                        ("https://upload.example.invalid/replay", "PUT", new Dictionary<string, string>()));
+                    requestedBatches.Add(files.Select(static file => file.FileName).ToArray());
+                    return Task.FromResult<IReadOnlyList<UploadRouteResult>>(
+                        files
+                            .Select(static file => new UploadRouteResult.Ready(
+                                file.FileName,
+                                "https://upload.example.invalid/replay",
+                                "PUT",
+                                new Dictionary<string, string>()))
+                            .ToArray());
                 }),
                 new HttpClient(new StubHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK))));
 
@@ -77,7 +83,8 @@ public sealed class MainViewModelTests
 
             await viewModel.SyncDirectoryAsync(replayDirectory);
 
-            Assert.Equal(["new.replay"], requestedFiles);
+            Assert.Single(requestedBatches);
+            Assert.Equal(["new.replay"], requestedBatches[0]);
 
             Assert.Equal(2, uploadLogStore.GetSnapshot().Count);
             Assert.Equal(UploadStatus.Uploaded, uploadLogStore.GetStatus("existing.replay")?.Status);
@@ -131,8 +138,14 @@ public sealed class MainViewModelTests
 
             var uploadService = new UploadService(
                 authService,
-                new FakeUploadRoutingClient(_ => Task.FromResult<(string, string, IReadOnlyDictionary<string, string>)>(
-                    ("https://upload.example.invalid/replay", "PUT", new Dictionary<string, string>()))),
+                new FakeUploadRoutingClient((files, _) => Task.FromResult<IReadOnlyList<UploadRouteResult>>(
+                    files
+                        .Select(static file => new UploadRouteResult.Ready(
+                            file.FileName,
+                            "https://upload.example.invalid/replay",
+                            "PUT",
+                            new Dictionary<string, string>()))
+                        .ToArray())),
                 new HttpClient(new StubHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK))));
 
             var viewModel = new MainViewModel(
@@ -170,16 +183,18 @@ public sealed class MainViewModelTests
 
     private sealed class FakeUploadRoutingClient : IUploadRoutingClient
     {
-        private readonly Func<(string FileName, long Size, string Token), Task<(string, string, IReadOnlyDictionary<string, string>)>> handler;
+        private readonly Func<IReadOnlyList<UploadRouteRequest>, string, Task<IReadOnlyList<UploadRouteResult>>> handler;
 
-        public FakeUploadRoutingClient(Func<(string FileName, long Size, string Token), Task<(string, string, IReadOnlyDictionary<string, string>)>> handler)
+        public FakeUploadRoutingClient(Func<IReadOnlyList<UploadRouteRequest>, string, Task<IReadOnlyList<UploadRouteResult>>> handler)
         {
             this.handler = handler;
         }
 
-        public Task<(string UploadUrl, string Method, IReadOnlyDictionary<string, string> Headers)> RequestUploadUrlAsync(string fileName, long fileSize, string bearerToken, CancellationToken cancellationToken = default)
+        public int MaxBatchSize => 5;
+
+        public Task<IReadOnlyList<UploadRouteResult>> RequestUploadUrlsAsync(IReadOnlyList<UploadRouteRequest> files, string bearerToken, CancellationToken cancellationToken = default)
         {
-            return handler((fileName, fileSize, bearerToken));
+            return handler(files, bearerToken);
         }
     }
 }
