@@ -64,8 +64,8 @@ public sealed class AuthServiceTests
     private static AuthService CreateAuthService(ProtectedFileStore store)
     {
         var config = new AppConfiguration(
-            "https://strinova.gg",
-            "https://clerk.strinova.gg",
+            "https://stringify.gg",
+            "https://clerk.stringify.gg",
             "client-id",
             "profile email",
             "stringify-gg://auth/callback",

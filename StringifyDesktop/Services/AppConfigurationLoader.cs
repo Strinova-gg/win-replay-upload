@@ -9,8 +9,8 @@ public sealed class AppConfigurationLoader
     {
         var dto = LoadFileConfiguration() ?? new ConfigurationDto();
 
-        var backendUrl = Read("BACKEND_URL", dto.BackendUrl, "https://strinova.gg");
-        var issuer = Read("CLERK_OAUTH_ISSUER", dto.OAuthIssuer, "https://clerk.strinova.gg");
+        var backendUrl = Read("BACKEND_URL", dto.BackendUrl, "https://stringify.gg");
+        var issuer = Read("CLERK_OAUTH_ISSUER", dto.OAuthIssuer, "https://clerk.stringify.gg");
         var clientId = Read("CLERK_OAUTH_CLIENT_ID", dto.OAuthClientId, "9YfNu3Z7Vm9PvZ6G");
         var scopes = Read("CLERK_OAUTH_SCOPES", dto.OAuthScopes, "profile email");
         var callback = Read("CLERK_OAUTH_CALLBACK_URI", dto.OAuthCallbackUri, "stringify-gg://auth/callback");
